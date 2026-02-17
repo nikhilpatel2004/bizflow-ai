@@ -91,23 +91,23 @@
    try {
      const { messages, agentType } = await req.json();
      
-     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
-     if (!LOVABLE_API_KEY) {
-       throw new Error("LOVABLE_API_KEY is not configured");
+     const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY");
+     if (!OPENAI_API_KEY) {
+       throw new Error("OPENAI_API_KEY is not configured");
      }
  
      const systemPrompt = agentPrompts[agentType] || agentPrompts.marketing;
  
      console.log(`Agent chat request - Agent: ${agentType}, Messages: ${messages.length}`);
  
-     const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+     const response = await fetch("https://api.openai.com/v1/chat/completions", {
        method: "POST",
        headers: {
-         Authorization: `Bearer ${LOVABLE_API_KEY}`,
+         Authorization: `Bearer ${OPENAI_API_KEY}`,
          "Content-Type": "application/json",
        },
        body: JSON.stringify({
-         model: "google/gemini-3-flash-preview",
+         model: "gpt-3.5-turbo",
          messages: [
            { role: "system", content: systemPrompt },
            ...messages,
@@ -117,9 +117,15 @@
      });
  
      if (!response.ok) {
+       if (response.status === 401) {
+         return new Response(
+           JSON.stringify({ error: "Authentication error. Please check your OpenAI API key." }),
+           { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+         );
+       }
        if (response.status === 429) {
          return new Response(
-           JSON.stringify({ error: "Rate limits exceeded, please try again later." }),
+           JSON.stringify({ error: "Rate limits exceeded or insufficient credits. Please check your OpenAI account and try again later." }),
            { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } }
          );
        }
