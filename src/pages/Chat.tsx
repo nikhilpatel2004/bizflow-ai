@@ -57,6 +57,8 @@ import { useState, useEffect, useRef, useCallback } from "react";
      description: "Data insights and recommendations",
    },
  ];
+
+const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
  
  export default function Chat() {
    const [searchParams, setSearchParams] = useSearchParams();
@@ -67,6 +69,7 @@ import { useState, useEffect, useRef, useCallback } from "react";
    const [input, setInput] = useState("");
    const [isLoading, setIsLoading] = useState(false);
    const messagesEndRef = useRef<HTMLDivElement>(null);
+   const requestLockRef = useRef(false);
    const { user } = useAuth();
    const { toast } = useToast();
  
@@ -143,32 +146,48 @@ import { useState, useEffect, useRef, useCallback } from "react";
  
    const handleSubmit = async (e: React.FormEvent) => {
      e.preventDefault();
-     if (!input.trim() || isLoading) return;
- 
-     const userMessage = input.trim();
-     setInput("");
-     
-     // Add user message
-     const userMsg: Message = { role: "user", content: userMessage };
-     setMessages((prev) => [...prev, userMsg]);
-     await saveMessage("user", userMessage);
- 
+     if (!input.trim() || isLoading || requestLockRef.current) return;
+
+     requestLockRef.current = true;
      setIsLoading(true);
- 
+
      try {
+       const userMessage = input.trim();
+       setInput("");
+
+       // Add user message
+       const userMsg: Message = { role: "user", content: userMessage };
+       setMessages((prev) => [...prev, userMsg]);
+       await saveMessage("user", userMessage);
+
        const CHAT_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/agent-chat`;
+       const chatHeaders = {
+         "Content-Type": "application/json",
+         Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
+       };
+       const payload = {
+         messages: [...messages, userMsg],
+         agentType: selectedAgent,
+       };
        
-       const response = await fetch(CHAT_URL, {
+       let response = await fetch(CHAT_URL, {
          method: "POST",
-         headers: {
-           "Content-Type": "application/json",
-           Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
-         },
-         body: JSON.stringify({
-           messages: [...messages, userMsg],
-           agentType: selectedAgent,
-         }),
+         headers: chatHeaders,
+         body: JSON.stringify(payload),
        });
+
+       if (response.status === 429) {
+         const retryAfter = response.headers.get("Retry-After");
+         const retrySeconds = retryAfter ? Number(retryAfter) : NaN;
+         const delay = Number.isFinite(retrySeconds) ? Math.max(retrySeconds, 1) * 1000 : 3000;
+         await response.body?.cancel();
+         await sleep(delay);
+         response = await fetch(CHAT_URL, {
+           method: "POST",
+           headers: chatHeaders,
+           body: JSON.stringify(payload),
+         });
+       }
  
        if (!response.ok) {
         if (response.status === 404) {
@@ -177,14 +196,14 @@ import { useState, useEffect, useRef, useCallback } from "react";
           );
         }
          if (response.status === 429) {
-           throw new Error("Rate limit exceeded. Please try again later.");
+           throw new Error("Rate limit exceeded. Please wait a moment and try again.");
          }
          if (response.status === 402) {
            throw new Error("Usage limit reached. Please add credits.");
          }
          throw new Error("Failed to get response");
        }
- 
+
        // Stream the response
        const reader = response.body?.getReader();
        const decoder = new TextDecoder();
@@ -250,6 +269,7 @@ import { useState, useEffect, useRef, useCallback } from "react";
          variant: "destructive",
        });
      } finally {
+       requestLockRef.current = false;
        setIsLoading(false);
      }
    };
