@@ -19,6 +19,7 @@
  import {
    Dialog,
    DialogContent,
+  DialogDescription,
    DialogHeader,
    DialogTitle,
    DialogTrigger,
@@ -101,9 +102,17 @@
  
      if (error) {
        console.error("Error loading tasks:", error);
+      const tableMissing =
+        error.code === "PGRST205" ||
+        error.message?.toLowerCase().includes("could not find") ||
+        error.message?.toLowerCase().includes("relation") ||
+        error.message?.toLowerCase().includes("tasks");
+
        toast({
          title: "Error",
-         description: "Failed to load tasks",
+        description: tableMissing
+          ? "Tasks table is missing in Supabase. Run project migrations in your Supabase project."
+          : "Failed to load tasks",
          variant: "destructive",
        });
      } else {
@@ -125,14 +134,16 @@
          description: newTask.description || null,
          agent_type: newTask.agent_type,
          priority: newTask.priority,
+         status: "pending",
        })
        .select()
        .single();
  
      if (error) {
+       console.error("Error creating task:", error);
        toast({
          title: "Error",
-         description: "Failed to create task",
+         description: error.message || "Failed to create task",
          variant: "destructive",
        });
      } else {
@@ -211,6 +222,9 @@
            <DialogContent>
              <DialogHeader>
                <DialogTitle>Create New Task</DialogTitle>
+              <DialogDescription>
+                Add a new task and assign it to an AI agent.
+              </DialogDescription>
              </DialogHeader>
              <div className="space-y-4">
                <div className="space-y-2">

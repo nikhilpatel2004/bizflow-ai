@@ -1,4 +1,4 @@
- import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
  import { useSearchParams } from "react-router-dom";
  import { motion, AnimatePresence } from "framer-motion";
  import ReactMarkdown from "react-markdown";
@@ -72,19 +72,11 @@
  
    const currentAgent = agents.find((a) => a.id === selectedAgent)!;
  
-   useEffect(() => {
-     loadMessages();
-   }, [selectedAgent, user]);
- 
-   useEffect(() => {
-     scrollToBottom();
-   }, [messages]);
- 
    const scrollToBottom = () => {
      messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
    };
  
-   const loadMessages = async () => {
+  const loadMessages = useCallback(async () => {
      if (!user) return;
      
      const { data, error } = await supabase
@@ -96,6 +88,20 @@
  
      if (error) {
        console.error("Error loading messages:", error);
+      const tableMissing =
+        error.code === "PGRST205" ||
+        error.message?.toLowerCase().includes("could not find") ||
+        error.message?.toLowerCase().includes("relation") ||
+        error.message?.toLowerCase().includes("chat_messages");
+
+      if (tableMissing) {
+        toast({
+          title: "Database setup required",
+          description:
+            "chat_messages table is missing in Supabase. Run your project migration SQL in this Supabase project.",
+          variant: "destructive",
+        });
+      }
        return;
      }
  
@@ -105,7 +111,15 @@
          content: msg.content,
        }))
      );
-   };
+  }, [selectedAgent, toast, user]);
+
+  useEffect(() => {
+    loadMessages();
+  }, [loadMessages]);
+
+  useEffect(() => {
+    scrollToBottom();
+  }, [messages]);
  
    const handleAgentChange = (agentId: AgentType) => {
      setSelectedAgent(agentId);
@@ -114,13 +128,17 @@
  
    const saveMessage = async (role: "user" | "assistant", content: string) => {
      if (!user) return;
-     
-     await supabase.from("chat_messages").insert({
+
+    const { error } = await supabase.from("chat_messages").insert({
        user_id: user.id,
        agent_type: selectedAgent,
        role,
        content,
      });
+
+    if (error) {
+      console.error("Error saving message:", error);
+    }
    };
  
    const handleSubmit = async (e: React.FormEvent) => {
@@ -153,6 +171,11 @@
        });
  
        if (!response.ok) {
+        if (response.status === 404) {
+          throw new Error(
+            "agent-chat function not found. Deploy the Supabase Edge Function 'agent-chat' to this project."
+          );
+        }
          if (response.status === 429) {
            throw new Error("Rate limit exceeded. Please try again later.");
          }
@@ -214,9 +237,16 @@
          await saveMessage("assistant", assistantContent);
        }
      } catch (error) {
+      const message =
+        error instanceof Error
+          ? error.message.includes("Failed to fetch")
+            ? "Cannot reach Supabase function. Deploy 'agent-chat' and verify CORS/preflight in the same Supabase project."
+            : error.message
+          : "Failed to send message";
+
        toast({
          title: "Error",
-         description: error instanceof Error ? error.message : "Failed to send message",
+        description: message,
          variant: "destructive",
        });
      } finally {

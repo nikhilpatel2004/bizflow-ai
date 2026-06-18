@@ -5,6 +5,23 @@ import type { Database } from './types';
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
 const SUPABASE_PUBLISHABLE_KEY = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
 
+// Basic validation to make the runtime error easier to diagnose locally.
+if (!SUPABASE_URL || typeof SUPABASE_URL !== "string" || !SUPABASE_URL.startsWith("http")) {
+  // eslint-disable-next-line no-console
+  console.error(
+    "Supabase URL is missing or invalid. Check your .env and ensure VITE_SUPABASE_URL is set to your Supabase project URL (e.g. https://your-project.supabase.co).",
+    SUPABASE_URL
+  );
+}
+
+if (!SUPABASE_PUBLISHABLE_KEY || typeof SUPABASE_PUBLISHABLE_KEY !== "string") {
+  // eslint-disable-next-line no-console
+  console.error(
+    "Supabase publishable key is missing. Check your .env and ensure VITE_SUPABASE_PUBLISHABLE_KEY is set.",
+    Boolean(SUPABASE_PUBLISHABLE_KEY)
+  );
+}
+
 // Import the supabase client like this:
 // import { supabase } from "@/integrations/supabase/client";
 

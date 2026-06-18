@@ -1,9 +1,11 @@
  import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
  
- const corsHeaders = {
-   "Access-Control-Allow-Origin": "*",
-   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
- };
+const corsHeaders = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
+  "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+  "Access-Control-Allow-Credentials": "true",
+};
  
  const agentPrompts: Record<string, string> = {
    marketing: `You are the Marketing Agent for BizBrain AI, a specialized AI assistant focused on marketing and business growth strategies.
@@ -84,9 +86,9 @@
  };
  
  serve(async (req) => {
-   if (req.method === "OPTIONS") {
-     return new Response("ok", { headers: corsHeaders });
-   }
+  if (req.method === "OPTIONS") {
+    return new Response(null, { status: 204, headers: corsHeaders });
+  }
  
    try {
      const { messages, agentType } = await req.json();
